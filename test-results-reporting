@@ -1,0 +1,89 @@
+import xml.etree.ElementTree as ET
+import csv
+import argparse
+import requests
+
+
+def parse_nunit_results(xml_file):
+    tree = ET.parse(xml_file)
+    root = tree.getroot()
+
+    summary = root.find('test-suite').attrib
+    summary_results = {
+        'Total Tests': summary['total'],
+        'Failures': summary['failures'],
+        'Passed Tests ': summary['passed']
+    }
+
+    test_cases = root.findall('.//test-case')
+
+    results = []
+    for test_case in test_cases:
+        result = {
+            'Name': test_case.attrib['name'],
+            'Result': test_case.attrib['result'],
+            'Priority': test_case.attrib.get('priority', '')
+        }
+        results.append(result)
+
+    return summary_results, results
+
+
+def parse_xunit_results(xml_file):
+    tree = ET.parse(xml_file)
+    root = tree.getroot()
+
+    assembly = root.find('assembly')
+    summary = assembly.attrib
+    summary_results = {
+        'Total': summary['total'],
+        'Passed': summary['passed'],
+        'Failed': summary['failed']
+    }
+
+    test_cases = root.findall('.//test')
+
+    results = []
+    for test_case in test_cases:
+        result = {
+            'Name': test_case.attrib['name'],
+            'Result': test_case.attrib['result'],
+            'Priority': test_case.attrib.get('priority', '')
+        }
+        results.append(result)
+
+    return summary_results, results
+
+
+
+def generate_summary_table(summary_results):
+    table = []
+    for key, value in summary_results.items():
+        table.append([key, value])
+
+    return table
+
+
+def generate_test_cases_table(results):
+    table = [['Name', 'Result', 'Priority']]
+    for result in results:
+        table.append([result['Name'], result['Result'], result['Priority']])
+
+    return table
+
+
+def save_table_to_csv(table, file_name):
+    with open(file_name, 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerows(table)
+
+
+def send_to_slack(message, webhook_url):
+    payload = {'text': message}
+    requests.post(webhook_url, json=payload)
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Parse NUnit/XUnit test results and send to Slack channel.')
+    parser.add_argument('xml_file', type=str, help='Path to the NUnit/XUnit XML results file')
+    parser.add_argument('webhook_url', type=str, help='Slack incoming webhook URL')
